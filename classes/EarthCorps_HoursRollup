@@ -1,0 +1,150 @@
+global without sharing class EarthCorps_HoursRollup extends GW_ABS_Rollup {
+
+	public EarthCorps_HoursRollup (id parentRecId) {
+		super (parentRecId);
+	}
+	
+	public EarthCorps_HoursRollup (string SOQL) {
+		super (SOQL);
+	}
+
+	public EarthCorps_HoursRollup (integer batchSz) {
+		super (batchSz);
+	}
+	
+	public EarthCorps_HoursRollup (set<id> parentRecIds) {
+		super (parentRecIds);
+	}
+	
+	global override string setParentObjName() {
+		return 'Contact';
+	}
+	
+	global virtual override list<RollupSpec> setRollupSpecs() {
+		list<RollupSpec> mySpecs = new list<RollupSpec>();
+		
+		// create a rollup spec, specifying the object that has the details to be rolled up, 
+		// and the field in that table that relates it to the parent object
+		RollupSpec rs = new RollupSpec('GW_Volunteers__Volunteer_Hours__c', 'GW_Volunteers__Contact__c');
+		
+		// where clause elements
+		rs.filter = 'GW_Volunteers__Start_Date__c = THIS_YEAR AND GW_Volunteers__Status__c = \'Completed\'';
+		
+		// this maps aggregate functions to the rollup field names that summarize them
+		rs.aggregateToParentFieldnameMap = new map<string, string> {
+			'SUM(GW_Volunteers__Total_Hours_Worked__c)' => 'Total_Volunteer_Hours_This_Year__c' //Total_Volunteer_Hours_Last_Year__c Total_Volunteer_Hours_This_Year__c
+		};
+
+		mySpecs.add(rs);
+
+
+		//total hours worked last year
+		RollupSpec rs2 = new RollupSpec('GW_Volunteers__Volunteer_Hours__c', 'GW_Volunteers__Contact__c');
+		rs2.filter = 'GW_Volunteers__Start_Date__c = LAST_YEAR AND GW_Volunteers__Status__c = \'Completed\'';
+		rs2.aggregateToParentFieldnameMap = new map<string, string> {
+			'SUM(GW_Volunteers__Total_Hours_Worked__c)' => 'Total_Volunteer_Hours_Last_Year__c' //Total_Volunteer_Hours_Last_Year__c Total_Volunteer_Hours_This_Year__c
+		};
+
+		mySpecs.add(rs2);
+
+
+		//total hours worked last 365 days
+		RollupSpec rs3 = new RollupSpec('GW_Volunteers__Volunteer_Hours__c', 'GW_Volunteers__Contact__c');
+		rs3.filter = 'GW_Volunteers__Start_Date__c = LAST_N_DAYS:365 AND GW_Volunteers__Status__c = \'Completed\'';
+		rs3.aggregateToParentFieldnameMap = new map<string, string> {
+			'SUM(GW_Volunteers__Total_Hours_Worked__c)' => 'Total_Volunteer_Hours_Last_365_Days__c' //Total_Volunteer_Hours_Last_Year__c Total_Volunteer_Hours_This_Year__c
+		};
+
+		mySpecs.add(rs3);
+		/*
+		// these let you pass in sets of filter strings to include or leave out		
+		rs.setFiltersIn = new map<string, set<string>> {
+			'type' => new set<string> { }
+		};
+		rs.setFiltersNotIn = new map<string, set<string>> {
+		};
+		
+		// this maps each aggregate field to a map of subgroup values and the fields that summarize them
+		rs.subgroupValueToParentFieldnameMap = new map<string, map<object, string>> {
+			'SUM(Amount)' => new map<object, string> { 
+				2011 => 'OppAmountThisYear__c', 
+				2010 => 'OppAmountLastYear__c' 
+			},
+			'COUNT_DISTINCT(Id)' => new map<object, string> { 
+				2011 => 'OppsClosedThisYear__c', 
+				2010 => 'OppsClosedLastYear__c'
+			}
+		};
+
+		// optional having clause, to limit the subgroups
+		rs.subgroupFilter = 'Fiscal_Year(closeDate) = null OR Fiscal_Year(closeDate) >= 2010';		
+		
+		mySpecs.add(rs);
+		
+		// create a second rollup spec 
+		rs = new RollupSpec('opportunity', 'campaignId');
+		
+		// where clause elements
+		rs.filter = 'isClosed = false';
+		
+		// this maps aggregate functions to the rollup field names that summarize them
+		rs.aggregateToParentFieldnameMap = new map<string, string> {
+			'SUM(Amount)' => 'Total_Value_Open_Requests__c',
+			'COUNT_DISTINCT(Id)' => 'Num_Open_Requests__c' 
+		};		
+		*/
+		
+		
+		return mySpecs; 
+	}	
+
+
+	static testMethod void testrollup () {
+
+		datetime now = system.now();
+
+        Account acc = new Account(name='Individual Test Account');
+        insert acc;
+        Contact con = new Contact(Lastname='Testy', AccountId=acc.Id);
+        insert con;
+        Campaign cmp = new Campaign(name='Test Campaign', IsActive=true);
+        insert cmp;
+        GW_Volunteers__Volunteer_Job__c job = new GW_Volunteers__Volunteer_Job__c(name='Job1', GW_Volunteers__campaign__c=cmp.Id);
+        insert job;
+        GW_Volunteers__Volunteer_Shift__c shift1 = new GW_Volunteers__Volunteer_Shift__c(GW_Volunteers__Volunteer_Job__c=job.Id, GW_Volunteers__Duration__c=1, GW_Volunteers__Start_Date_Time__c=now);
+        GW_Volunteers__Volunteer_Shift__c shift2 = new GW_Volunteers__Volunteer_Shift__c(GW_Volunteers__Volunteer_Job__c=job.Id, GW_Volunteers__Duration__c=1, GW_Volunteers__Start_Date_Time__c=now.addyears(-1));
+        insert shift1;
+        insert shift2;
+
+        GW_Volunteers__Volunteer_Hours__c hours1 = new GW_Volunteers__Volunteer_Hours__c(
+			GW_Volunteers__Contact__c=con.id,
+			GW_Volunteers__Status__c='Completed',
+			GW_Volunteers__Volunteer_Shift__c=shift1.id,
+			GW_Volunteers__Volunteer_Job__c=job.id,
+			GW_Volunteers__Start_Date__c=system.today(),
+			GW_Volunteers__Hours_Worked__c=8
+		);
+        GW_Volunteers__Volunteer_Hours__c hours2 = new GW_Volunteers__Volunteer_Hours__c(
+			GW_Volunteers__Contact__c=con.id,
+			GW_Volunteers__Status__c='Completed',
+			GW_Volunteers__Volunteer_Shift__c=shift2.id,
+			GW_Volunteers__Volunteer_Job__c=job.id,
+			GW_Volunteers__Start_Date__c=system.today().addyears(-1),
+			GW_Volunteers__Hours_Worked__c=12
+		);
+		insert hours1;
+		insert hours2;
+    
+		// run the rollup
+		Test.StartTest();
+		EarthCorps_HoursRollup rollup = new EarthCorps_HoursRollup(con.id);
+		rollup.runRollups();
+		Test.StopTest();
+
+		Contact upd = [select id, Total_Volunteer_Hours_Last_Year__c, Total_Volunteer_Hours_This_Year__c from contact where id= : con.id];
+		system.debug('lookhere!'+upd);
+		System.assertEquals ( 8, upd.Total_Volunteer_Hours_This_Year__c);
+		System.assertEquals ( 12, upd.Total_Volunteer_Hours_Last_Year__c);
+		
+	}
+}
